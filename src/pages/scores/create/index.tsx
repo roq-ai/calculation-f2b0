@@ -1,0 +1,135 @@
+import AppLayout from 'layout/app-layout';
+import React, { useState } from 'react';
+import {
+  FormControl,
+  FormLabel,
+  Input,
+  Button,
+  Text,
+  Box,
+  Spinner,
+  FormErrorMessage,
+  Switch,
+  NumberInputStepper,
+  NumberDecrementStepper,
+  NumberInputField,
+  NumberIncrementStepper,
+  NumberInput,
+} from '@chakra-ui/react';
+import { useFormik, FormikHelpers } from 'formik';
+import * as yup from 'yup';
+import DatePicker from 'react-datepicker';
+import { FiEdit3 } from 'react-icons/fi';
+import { useRouter } from 'next/router';
+import { createScore } from 'apiSdk/scores';
+import { Error } from 'components/error';
+import { scoreValidationSchema } from 'validationSchema/scores';
+import { AsyncSelect } from 'components/async-select';
+import { ArrayFormField } from 'components/array-form-field';
+import { AccessOperationEnum, AccessServiceEnum, requireNextAuth, withAuthorization } from '@roq/nextjs';
+import { compose } from 'lib/compose';
+import { ExcelFileInterface } from 'interfaces/excel-file';
+import { getExcelFiles } from 'apiSdk/excel-files';
+import { ScoreInterface } from 'interfaces/score';
+
+function ScoreCreatePage() {
+  const router = useRouter();
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (values: ScoreInterface, { resetForm }: FormikHelpers<any>) => {
+    setError(null);
+    try {
+      await createScore(values);
+      resetForm();
+      router.push('/scores');
+    } catch (error) {
+      setError(error);
+    }
+  };
+
+  const formik = useFormik<ScoreInterface>({
+    initialValues: {
+      student_name: '',
+      subject: '',
+      score: 0,
+      excel_file_id: (router.query.excel_file_id as string) ?? null,
+    },
+    validationSchema: scoreValidationSchema,
+    onSubmit: handleSubmit,
+    enableReinitialize: true,
+    validateOnChange: false,
+    validateOnBlur: false,
+  });
+
+  return (
+    <AppLayout>
+      <Box bg="white" p={4} rounded="md" shadow="md">
+        <Box mb={4}>
+          <Text as="h1" fontSize="2xl" fontWeight="bold">
+            Create Score
+          </Text>
+        </Box>
+        {error && (
+          <Box mb={4}>
+            <Error error={error} />
+          </Box>
+        )}
+        <form onSubmit={formik.handleSubmit}>
+          <FormControl id="student_name" mb="4" isInvalid={!!formik.errors?.student_name}>
+            <FormLabel>Student Name</FormLabel>
+            <Input type="text" name="student_name" value={formik.values?.student_name} onChange={formik.handleChange} />
+            {formik.errors.student_name && <FormErrorMessage>{formik.errors?.student_name}</FormErrorMessage>}
+          </FormControl>
+          <FormControl id="subject" mb="4" isInvalid={!!formik.errors?.subject}>
+            <FormLabel>Subject</FormLabel>
+            <Input type="text" name="subject" value={formik.values?.subject} onChange={formik.handleChange} />
+            {formik.errors.subject && <FormErrorMessage>{formik.errors?.subject}</FormErrorMessage>}
+          </FormControl>
+          <FormControl id="score" mb="4" isInvalid={!!formik.errors?.score}>
+            <FormLabel>Score</FormLabel>
+            <NumberInput
+              name="score"
+              value={formik.values?.score}
+              onChange={(valueString, valueNumber) =>
+                formik.setFieldValue('score', Number.isNaN(valueNumber) ? 0 : valueNumber)
+              }
+            >
+              <NumberInputField />
+              <NumberInputStepper>
+                <NumberIncrementStepper />
+                <NumberDecrementStepper />
+              </NumberInputStepper>
+            </NumberInput>
+            {formik.errors.score && <FormErrorMessage>{formik.errors?.score}</FormErrorMessage>}
+          </FormControl>
+          <AsyncSelect<ExcelFileInterface>
+            formik={formik}
+            name={'excel_file_id'}
+            label={'Select Excel File'}
+            placeholder={'Select Excel File'}
+            fetcher={getExcelFiles}
+            renderOption={(record) => (
+              <option key={record.id} value={record.id}>
+                {record?.file_name}
+              </option>
+            )}
+          />
+          <Button isDisabled={formik?.isSubmitting} colorScheme="blue" type="submit" mr="4">
+            Submit
+          </Button>
+        </form>
+      </Box>
+    </AppLayout>
+  );
+}
+
+export default compose(
+  requireNextAuth({
+    redirectTo: '/',
+  }),
+  withAuthorization({
+    service: AccessServiceEnum.PROJECT,
+    entity: 'score',
+    operation: AccessOperationEnum.CREATE,
+  }),
+)(ScoreCreatePage);
